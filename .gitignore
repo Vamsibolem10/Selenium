@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Selenium Automation Outputs
+logs/
+screenshots/
+reports/
+report.html
+.pytest_cache/
+.vscode/

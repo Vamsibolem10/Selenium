@@ -1,0 +1,9 @@
+selenium
+webdriver-manager
+pytest
+pytest-html
+pytest-xdist
+pytest-rerunfailures
+loguru
+Pillow
+python-dotenv
