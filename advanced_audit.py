@@ -43,19 +43,26 @@ def run_advanced_audit(url, deep_crawl=False, report_name=None):
         audit_page.capture_full_page_screenshot()
         
         # 2. Basic Assets
-        links_report = audit_page.check_all_links()
+        links_report, broken_links_details = audit_page.check_all_links()
         audit_results["links_total"] = len(links_report)
-        audit_results["links_broken"] = len([l for l in links_report if l['status'] >= 400])
+        audit_results["links_broken"] = len(broken_links_details)
+        audit_results["broken_links_list"] = broken_links_details
         audit_results["images_broken"] = len(audit_page.check_all_images())
 
-        # 3. Deep Analysis (Optional)
+        # 3. Button Interaction (New requirement)
+        log.info("--- Initiating Button Interaction Analysis ---")
+        clicked_buttons = audit_page.interact_with_all_buttons()
+        audit_results["buttons_found"] = len(clicked_buttons)
+        audit_results["clicked_buttons_list"] = clicked_buttons
+
+        # 4. Deep Analysis (Optional)
         if deep_crawl:
             log.info("--- Initiating Deep Analysis / Site Mapping ---")
             spider = SiteSpider(driver, max_depth=1)
             spider.crawl(url)
             summary = spider.get_summary()
             audit_results["pages_crawled"] = summary["pages_visited"]
-            audit_results["buttons_found"] = summary["buttons_found"]
+            # Merge spider results if needed, but we already have button interactions from the main page
         
         audit_results["status"] = "Success"
         log.info("Audit Completed Successfully!")
@@ -85,108 +92,231 @@ def run_advanced_audit(url, deep_crawl=False, report_name=None):
         print_final_report(audit_results)
 
 def generate_html_report(res, path):
-    """Generates an HTML report that mimics the pytest-html v4.2.0 style."""
+    """Generates a premium, modern HTML report with rich aesthetics."""
     import platform
     import sys
+    from datetime import datetime
     
-    timestamp = res['timestamp']
+    timestamp = res.get('timestamp', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     python_version = sys.version.split()[0]
     plat = platform.platform()
     
-    # Calculate durations/summary
-    total_tests = 1
-    passed = 1 if res['status'] == 'Success' else 0
-    failed = 1 - passed
+    passed = res['status'] == 'Success'
+    
+    # Pre-process lists for HTML
+    broken_links_html = "".join([
+        f"<li class='list-item broken'><span class='tag error'>{l['status']}</span> <span class='url'>{l['url']}</span></li>" 
+        for l in res.get('broken_links_list', [])
+    ]) or "<li class='list-item empty'>No broken links detected.</li>"
+    
+    buttons_html = "".join([
+        f"<li class='list-item button-act'><span class='tag {'success' if 'Success' in b['status'] else 'error'}'>{b['status']}</span> <span class='btn-text'>{b['text']}</span></li>" 
+        for b in res.get('clicked_buttons_list', [])
+    ]) or "<li class='list-item empty'>No buttons found or interacted with.</li>"
     
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <title>Audit Report - {res['url']}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Premium Audit Report - {res['url']}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
         <style>
+            :root {{
+                --bg-primary: #0f172a;
+                --bg-secondary: #1e293b;
+                --text-primary: #f1f5f9;
+                --text-secondary: #94a3b8;
+                --accent-primary: #38bdf8;
+                --accent-success: #22c55e;
+                --accent-error: #ef4444;
+                --accent-warning: #f59e0b;
+                --border-color: #334155;
+            }}
+            
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            
             body {{
-                font-family: Helvetica, Arial, sans-serif;
-                font-size: 12px;
-                line-height: 1.5;
-                color: #333;
-                background-color: #fff;
-                margin: 20px;
+                font-family: 'Inter', sans-serif;
+                background-color: var(--bg-primary);
+                color: var(--text-primary);
+                line-height: 1.6;
+                padding: 40px 20px;
             }}
-            h1 {{ font-size: 24px; margin-bottom: 10px; }}
-            h2 {{ font-size: 18px; margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            th {{ background-color: #eee; text-align: left; padding: 8px; border: 1px solid #ddd; }}
-            td {{ padding: 8px; border: 1px solid #ddd; vertical-align: top; }}
-            .passed {{ color: #2e7d32; font-weight: bold; }}
-            .failed {{ color: #d32f2f; font-weight: bold; }}
-            .env-table td:first-child {{ width: 150px; font-weight: bold; background-color: #f9f9f9; }}
-            .summary-table td {{ border: none; padding: 2px 8px; }}
+            
+            .container {{
+                max-width: 1100px;
+                margin: 0 auto;
+            }}
+            
+            header {{
+                margin-bottom: 40px;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+            }}
+            
+            h1 {{ font-size: 2.5rem; font-weight: 700; letter-spacing: -0.025em; color: var(--accent-primary); }}
+            .gen-info {{ color: var(--text-secondary); font-size: 0.875rem; }}
+            
+            .grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-bottom: 40px;
+            }}
+            
+            .card {{
+                background: var(--bg-secondary);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                padding: 24px;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+                transition: transform 0.2s;
+            }}
+            
+            .card:hover {{ transform: translateY(-2px); }}
+            
+            h2 {{ font-size: 1.25rem; margin-bottom: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }}
+            
+            .stat-value {{ font-size: 2rem; font-weight: 700; color: var(--accent-primary); }}
+            .stat-label {{ color: var(--text-secondary); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }}
+            
+            .table-container {{ overflow-x: auto; margin-top: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th {{ text-align: left; padding: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); font-size: 0.75rem; text-transform: uppercase; }}
+            td {{ padding: 16px 12px; border-bottom: 1px solid var(--border-color); vertical-align: top; }}
+            
+            .tag {{
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                display: inline-block;
+            }}
+            .tag.success {{ background: rgba(34, 197, 94, 0.2); color: #4ade80; }}
+            .tag.error {{ background: rgba(239, 68, 68, 0.2); color: #f87171; }}
+            .tag.warning {{ background: rgba(245, 158, 11, 0.2); color: #fbbf24; }}
+            
             .details-log {{
-                background-color: #f5f5f5;
-                padding: 10px;
-                border: 1px solid #ddd;
-                margin-top: 5px;
-                font-family: Consolas, Monaco, monospace;
+                background: #000;
+                color: #10b981;
+                padding: 16px;
+                border-radius: 8px;
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 0.8125rem;
                 white-space: pre-wrap;
-                font-size: 11px;
+                margin-top: 10px;
+                border: 1px solid #064e3b;
             }}
-            .filter-box {{ margin-top: 15px; color: #666; }}
+            
+            .list-container {{ list-style: none; }}
+            .list-item {{
+                padding: 10px;
+                border-bottom: 1px solid var(--border-color);
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                font-size: 0.875rem;
+            }}
+            .list-item:last-child {{ border-bottom: none; }}
+            .list-item .url {{ color: var(--accent-primary); text-decoration: none; word-break: break-all; }}
+            .list-item.empty {{ color: var(--text-secondary); font-style: italic; }}
+            
+            footer {{
+                margin-top: 60px;
+                text-align: center;
+                color: var(--text-secondary);
+                font-size: 0.75rem;
+            }}
+            
+            .highlight-box {{
+                background: rgba(56, 189, 248, 0.05);
+                border-left: 4px solid var(--accent-primary);
+                padding: 16px;
+                margin-top: 20px;
+                border-radius: 0 8px 8px 0;
+            }}
+            
+            ::-webkit-scrollbar {{ width: 8px; }}
+            ::-webkit-scrollbar-track {{ background: var(--bg-primary); }}
+            ::-webkit-scrollbar-thumb {{ background: var(--border-color); border-radius: 4px; }}
+            ::-webkit-scrollbar-thumb:hover {{ background: var(--text-secondary); }}
         </style>
     </head>
     <body>
-        <h1>report.html</h1>
-        <p>Report generated on {timestamp} by Industrial Selenium Framework (pytest-style)</p>
+        <div class="container">
+            <header>
+                <div>
+                    <h1>Audit Report</h1>
+                    <div class="gen-info">Target: {res['url']} &bull; {timestamp}</div>
+                </div>
+                <div class="tag {'success' if passed else 'error'}" style="font-size: 1rem; padding: 8px 16px;">
+                    {res['status']}
+                </div>
+            </header>
 
-        <h2>Environment</h2>
-        <table class="env-table">
-            <tr><td>Python</td><td>{python_version}</td></tr>
-            <tr><td>Platform</td><td>{plat}</td></tr>
-            <tr><td>Packages</td><td>pytest: 9.0.3, html: 4.2.0</td></tr>
-            <tr><td>Plugins</td><td>metadata: 3.1.1, rerunfailures: 16.2, xdist: 3.8.0</td></tr>
-        </table>
+            <div class="grid">
+                <div class="card">
+                    <div class="stat-label">Load Time</div>
+                    <div class="stat-value">{res['performance']}</div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Broken Links</div>
+                    <div class="stat-value" style="color: {'#ef4444' if res['links_broken'] > 0 else '#22c55e'}">
+                        {res['links_broken']}
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Buttons Clicked</div>
+                    <div class="stat-value">{res['buttons_found']}</div>
+                </div>
+            </div>
 
-        <h2>Summary</h2>
-        <p>{total_tests} test took {res['performance']}.</p>
-        <div class="filter-box">(Un)check the boxes to filter the results.</div>
-        <table class="summary-table">
-            <tr><td><span class="failed">{failed} Failed</span>,</td></tr>
-            <tr><td><span class="passed">{passed} Passed</span>,</td></tr>
-            <tr><td>0 Skipped, 0 Errors, 0 Reruns</td></tr>
-        </table>
+            <div class="grid">
+                <div class="card" style="grid-column: span 1;">
+                    <h2>Broken Links Discovery</h2>
+                    <ul class="list-container">
+                        {broken_links_html}
+                    </ul>
+                </div>
+                <div class="card" style="grid-column: span 1;">
+                    <h2>Button Interaction Log</h2>
+                    <ul class="list-container">
+                        {buttons_html}
+                    </ul>
+                </div>
+            </div>
 
-        <h2>Results</h2>
-        <table>
-            <tr>
-                <th>Result</th>
-                <th>Test</th>
-                <th>Duration</th>
-                <th>Links</th>
-            </tr>
-            <tr>
-                <td class="{"passed" if passed else "failed"}">{"Passed" if passed else "Failed"}</td>
-                <td>
-                    <b>advanced_audit::run_deep_audit</b><br/>
-                    Target: {res['url']}<br/>
-                    <div class="details-log">
------------------------------ Captured Audit Log -----------------------------
+            <div class="card">
+                <h2>Execution Environment</h2>
+                <div class="grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px;">
+                    <div class="gen-info"><strong>Python:</strong> {python_version}</div>
+                    <div class="gen-info"><strong>OS:</strong> {plat}</div>
+                    <div class="gen-info"><strong>Framework:</strong> Industrial Selenium v2.0</div>
+                    <div class="gen-info"><strong>Browser:</strong> Chrome (Headless)</div>
+                </div>
+                
+                <h2 style="margin-top: 30px;">Raw Audit Output</h2>
+                <div class="details-log">
 URL: {res['url']}
 Load Time: {res['performance']}
 Links Total: {res['links_total']}
 Links Broken: {res['links_broken']}
 Images Broken: {res['images_broken']}
+Buttons Interacted: {res['buttons_found']}
 Pages Crawled: {res['pages_crawled']}
 Status: {res['status']}
-------------------------------------------------------------------------------
-                    </div>
-                </td>
-                <td>{res['performance']}</td>
-                <td></td>
-            </tr>
-        </table>
+Timestamp: {timestamp}
+                </div>
+            </div>
 
-        <div style="margin-top: 40px; font-size: 10px; color: #999;">
-            Generated by Industrial Selenium Automation Framework &bull; {timestamp}
+            <footer>
+                &copy; 2026 Industrial Selenium Automation &bull; All Rights Reserved
+            </footer>
         </div>
     </body>
     </html>

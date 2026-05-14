@@ -11,18 +11,77 @@ class HealthCheckPage(BasePage):
         log.info("Starting link validation...")
         links = self.driver.find_elements(*self.LINKS)
         report = []
+        broken_links = []
         for link in links:
-            url = link.get_attribute("href")
-            if url and url.startswith("http"):
+            try:
+                url = link.get_attribute("href")
+                if url and url.startswith("http"):
+                    try:
+                        response = requests.head(url, timeout=5)
+                        status = response.status_code
+                        link_info = {"url": url, "status": status}
+                        report.append(link_info)
+                        if status >= 400:
+                            log.warning(f"Broken link found: {url} (Status: {status})")
+                            broken_links.append(link_info)
+                    except Exception as e:
+                        log.error(f"Error checking link {url}: {e}")
+                        broken_links.append({"url": url, "status": "Error", "error": str(e)})
+            except:
+                continue
+        return report, broken_links
+
+    def interact_with_all_buttons(self):
+        log.info("Starting button interaction (view and click)...")
+        buttons = self.driver.find_elements(By.TAG_NAME, "button")
+        clicked_buttons = []
+        
+        # Also find elements that look like buttons but are <a> or <div> with btn class
+        other_btns = self.driver.find_elements(By.CSS_SELECTOR, ".btn, .button, [role='button']")
+        all_potential_buttons = buttons + other_btns
+        
+        log.info(f"Found {len(all_potential_buttons)} potential buttons to interact with.")
+        
+        original_url = self.driver.current_url
+        
+        for i, btn in enumerate(all_potential_buttons):
+            try:
+                # 1. View: Scroll into view
+                self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
+                self.driver.execute_script("arguments[0].style.border='3px solid red';", btn) # Highlight it
+                
+                text = btn.text.strip() or btn.get_attribute("aria-label") or btn.get_attribute("value") or f"Button {i+1}"
+                log.info(f"Viewing and clicking button: {text}")
+                
+                # 2. Click
                 try:
-                    response = requests.head(url, timeout=5)
-                    status = response.status_code
-                    report.append({"url": url, "status": status})
-                    if status >= 400:
-                        log.warning(f"Broken link found: {url} (Status: {status})")
-                except Exception as e:
-                    log.error(f"Error checking link {url}: {e}")
-        return report
+                    # Try normal click first
+                    btn.click()
+                    clicked_buttons.append({"text": text, "status": "Success (Native)"})
+                except Exception:
+                    try:
+                        # Fallback to JS click
+                        self.driver.execute_script("arguments[0].click();", btn)
+                        clicked_buttons.append({"text": text, "status": "Success (JS)"})
+                    except Exception as click_err:
+                        log.warning(f"Failed to click button {text}: {click_err}")
+                        clicked_buttons.append({"text": text, "status": f"Failed: {str(click_err)[:50]}"})
+                
+                # If we navigated away, go back
+                if self.driver.current_url != original_url:
+                    self.driver.back()
+                    self.wait_for_full_load()
+                
+                # Remove highlight
+                try:
+                    self.driver.execute_script("arguments[0].style.border='';", btn)
+                except:
+                    pass
+                    
+            except Exception as e:
+                log.error(f"Error interacting with element: {e}")
+                
+        return clicked_buttons
 
     def check_all_images(self):
         log.info("Starting image validation...")
