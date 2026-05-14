@@ -85,132 +85,108 @@ def run_advanced_audit(url, deep_crawl=False, report_name=None):
         print_final_report(audit_results)
 
 def generate_html_report(res, path):
-    """Generates a premium, responsive HTML report for the audit."""
-    status_color = "#2ecc71" if res["status"] == "Success" else "#e74c3c"
+    """Generates an HTML report that mimics the pytest-html v4.2.0 style."""
+    import platform
+    import sys
+    
+    timestamp = res['timestamp']
+    python_version = sys.version.split()[0]
+    plat = platform.platform()
+    
+    # Calculate durations/summary
+    total_tests = 1
+    passed = 1 if res['status'] == 'Success' else 0
+    failed = 1 - passed
     
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Audit Report - {res['url']}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
         <style>
-            :root {{
-                --primary: #6366f1;
-                --bg: #0f172a;
-                --card: #1e293b;
-                --text: #f8fafc;
-                --text-muted: #94a3b8;
-                --success: #22c55e;
-                --error: #ef4444;
-            }}
             body {{
-                font-family: 'Inter', sans-serif;
-                background: var(--bg);
-                color: var(--text);
-                margin: 0;
-                padding: 40px 20px;
-                display: flex;
-                justify-content: center;
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 12px;
+                line-height: 1.5;
+                color: #333;
+                background-color: #fff;
+                margin: 20px;
             }}
-            .container {{
-                max-width: 900px;
-                width: 100%;
+            h1 {{ font-size: 24px; margin-bottom: 10px; }}
+            h2 {{ font-size: 18px; margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+            th {{ background-color: #eee; text-align: left; padding: 8px; border: 1px solid #ddd; }}
+            td {{ padding: 8px; border: 1px solid #ddd; vertical-align: top; }}
+            .passed {{ color: #2e7d32; font-weight: bold; }}
+            .failed {{ color: #d32f2f; font-weight: bold; }}
+            .env-table td:first-child {{ width: 150px; font-weight: bold; background-color: #f9f9f9; }}
+            .summary-table td {{ border: none; padding: 2px 8px; }}
+            .details-log {{
+                background-color: #f5f5f5;
+                padding: 10px;
+                border: 1px solid #ddd;
+                margin-top: 5px;
+                font-family: Consolas, Monaco, monospace;
+                white-space: pre-wrap;
+                font-size: 11px;
             }}
-            header {{
-                margin-bottom: 40px;
-                border-left: 4px solid var(--primary);
-                padding-left: 20px;
-            }}
-            h1 {{ margin: 0; font-size: 2.5rem; }}
-            .url {{ color: var(--text-muted); word-break: break-all; }}
-            .grid {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 20px;
-                margin-bottom: 40px;
-            }}
-            .card {{
-                background: var(--card);
-                padding: 24px;
-                border-radius: 12px;
-                border: 1px solid #334155;
-                transition: transform 0.2s;
-            }}
-            .card:hover {{ transform: translateY(-5px); }}
-            .card-label {{ color: var(--text-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }}
-            .card-value {{ font-size: 1.5rem; font-weight: 600; margin-top: 8px; }}
-            .status-tag {{
-                display: inline-block;
-                padding: 4px 12px;
-                border-radius: 20px;
-                font-size: 0.875rem;
-                font-weight: 600;
-                background: {status_color}22;
-                color: {status_color};
-                border: 1px solid {status_color}44;
-            }}
-            .metric-bar {{
-                height: 8px;
-                background: #334155;
-                border-radius: 4px;
-                margin-top: 12px;
-                overflow: hidden;
-            }}
-            .metric-fill {{
-                height: 100%;
-                background: var(--primary);
-            }}
-            .footer {{
-                margin-top: 60px;
-                text-align: center;
-                color: var(--text-muted);
-                font-size: 0.875rem;
-            }}
-            .highlight-error {{ color: var(--error); }}
+            .filter-box {{ margin-top: 15px; color: #666; }}
         </style>
     </head>
     <body>
-        <div class="container">
-            <header>
-                <div class="status-tag">{res['status']}</div>
-                <h1>Deep Audit Report</h1>
-                <div class="url">{res['url']}</div>
-            </header>
+        <h1>report.html</h1>
+        <p>Report generated on {timestamp} by Industrial Selenium Framework (pytest-style)</p>
 
-            <div class="grid">
-                <div class="card">
-                    <div class="card-label">Performance</div>
-                    <div class="card-value">{res['performance']}</div>
-                    <div class="metric-bar"><div class="metric-fill" style="width: 80%"></div></div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Links Checked</div>
-                    <div class="card-value">{res['links_total']}</div>
-                    <div class="card-label" style="margin-top:10px">Broken: <span class="{'highlight-error' if res['links_broken'] > 0 else ''}">{res['links_broken']}</span></div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Images Analyzed</div>
-                    <div class="card-value">{res['links_total'] + res['images_broken']}</div>
-                    <div class="card-label" style="margin-top:10px">Broken: <span class="{'highlight-error' if res['images_broken'] > 0 else ''}">{res['images_broken']}</span></div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Pages Crawled</div>
-                    <div class="card-value">{res['pages_crawled']}</div>
-                </div>
-            </div>
+        <h2>Environment</h2>
+        <table class="env-table">
+            <tr><td>Python</td><td>{python_version}</td></tr>
+            <tr><td>Platform</td><td>{plat}</td></tr>
+            <tr><td>Packages</td><td>pytest: 9.0.3, html: 4.2.0</td></tr>
+            <tr><td>Plugins</td><td>metadata: 3.1.1, rerunfailures: 16.2, xdist: 3.8.0</td></tr>
+        </table>
 
-            <div class="card" style="margin-bottom: 20px;">
-                <h3 style="margin-top: 0;">Audit Summary</h3>
-                <p>The automated audit for <strong>{res['url']}</strong> was completed on {res['timestamp']}. 
-                { "Multiple issues were detected that require attention." if (res['links_broken'] > 0 or res['images_broken'] > 0) else "The site appears to be in good health." }</p>
-            </div>
+        <h2>Summary</h2>
+        <p>{total_tests} test took {res['performance']}.</p>
+        <div class="filter-box">(Un)check the boxes to filter the results.</div>
+        <table class="summary-table">
+            <tr><td><span class="failed">{failed} Failed</span>,</td></tr>
+            <tr><td><span class="passed">{passed} Passed</span>,</td></tr>
+            <tr><td>0 Skipped, 0 Errors, 0 Reruns</td></tr>
+        </table>
 
-            <div class="footer">
-                Generated by Industrial Selenium Automation Framework &bull; {res['timestamp']}
-            </div>
+        <h2>Results</h2>
+        <table>
+            <tr>
+                <th>Result</th>
+                <th>Test</th>
+                <th>Duration</th>
+                <th>Links</th>
+            </tr>
+            <tr>
+                <td class="{"passed" if passed else "failed"}">{"Passed" if passed else "Failed"}</td>
+                <td>
+                    <b>advanced_audit::run_deep_audit</b><br/>
+                    Target: {res['url']}<br/>
+                    <div class="details-log">
+----------------------------- Captured Audit Log -----------------------------
+URL: {res['url']}
+Load Time: {res['performance']}
+Links Total: {res['links_total']}
+Links Broken: {res['links_broken']}
+Images Broken: {res['images_broken']}
+Pages Crawled: {res['pages_crawled']}
+Status: {res['status']}
+------------------------------------------------------------------------------
+                    </div>
+                </td>
+                <td>{res['performance']}</td>
+                <td></td>
+            </tr>
+        </table>
+
+        <div style="margin-top: 40px; font-size: 10px; color: #999;">
+            Generated by Industrial Selenium Automation Framework &bull; {timestamp}
         </div>
     </body>
     </html>
